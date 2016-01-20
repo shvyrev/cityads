@@ -46,15 +46,12 @@ public class AdActivity extends Activity implements LoaderManager.LoaderCallback
 
         linearLayout = (LinearLayout) findViewById(R.id.layout);
 
-        if (progressDialog == null) {
+        if (progressDialog == null)
             progressDialog = new ProgressDialog(this);
-
-        }else{
-            progressDialog.setCanceledOnTouchOutside(false);
-            progressDialog.setCancelable(false);
-            progressDialog.setMessage("Loading...");
-            progressDialog.show();
-        }
+        progressDialog.setCanceledOnTouchOutside(false);
+        progressDialog.setCancelable(false);
+        progressDialog.setMessage("Loading...");
+        progressDialog.show();
 
         bundle = new Bundle();
         bundle.putString("id", getIMSI());
