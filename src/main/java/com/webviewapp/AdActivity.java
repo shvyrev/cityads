@@ -86,6 +86,7 @@ public class AdActivity extends Activity implements LoaderManager.LoaderCallback
     }
 
     private void openDialog(String data) {
+        progressDialog.hide();
         AlertDialog.Builder dialog = new AlertDialog.Builder(this);
         dialog.setMessage(data)
                 .setPositiveButton("OK", new DialogInterface.OnClickListener() {
