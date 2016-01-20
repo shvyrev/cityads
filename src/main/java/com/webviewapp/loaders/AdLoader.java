@@ -5,11 +5,14 @@ import android.content.Context;
 import android.os.Bundle;
 import android.text.TextUtils;
 
+import com.webviewapp.ErrorHandler;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,6 +29,7 @@ import java.util.HashMap;
 public class AdLoader extends AsyncTaskLoader<String> {
     private static final String SIM_ID = "id";
     private static final String DEFAULT_IMSI = "";
+    private static final String TAG = AdLoader.class.getSimpleName();
     private String id;
 
     public static final String url = "http://www.505.rs/adviator/index.php";
@@ -47,57 +51,56 @@ public class AdLoader extends AsyncTaskLoader<String> {
     public String loadInBackground() {
         HashMap<String, String> params = new HashMap<>();
         params.put("id", id);
-
-        String requestParams = createRequestParams(params);
         HttpURLConnection connection = null;
+        int statusCode = 0;
 
         try {
+            String requestParams = createRequestParams(params);
+
             connection = createHttpPostConnection(url, charset);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        DataOutputStream outStream = null;
-        try {
-            outStream = new DataOutputStream(connection.getOutputStream());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try {
+            DataOutputStream outStream = new DataOutputStream(connection.getOutputStream());
             outStream.writeBytes(requestParams.toString());
             outStream.flush();
             outStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
-        InputStream inStream = null;
-        try {
-            inStream = new BufferedInputStream(connection.getInputStream());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inStream));
+            InputStream inStream = new BufferedInputStream(connection.getInputStream());
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inStream));
 
-        String inputLine;
-        StringBuffer result = new StringBuffer();
-
-        try {
+            String inputLine;
+            StringBuffer result = new StringBuffer();
             while((inputLine = reader.readLine()) != null){
                 result.append(inputLine);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try {
             inStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
 
-        return result.toString();
+
+            return result.toString();
+        } catch (IOException e) {
+
+            try {
+                statusCode = connection.getResponseCode();
+
+                ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+
+                InputStream es = connection.getErrorStream();
+                int ret;
+                byte[] buf = new byte[4096];
+
+                while ((ret = es.read(buf)) > 0) {
+                    outStream.write(buf, 0, ret);
+                }
+                es.close();
+
+                ErrorHandler.onHttpError(statusCode, new String(outStream.toByteArray()));
+
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+
+            ErrorHandler.onLoadingError(e.getStackTrace());
+
+            return null;
+        }
     }
 
     private HttpURLConnection createHttpPostConnection(String url, String charset) throws IOException {
@@ -111,42 +114,40 @@ public class AdLoader extends AsyncTaskLoader<String> {
         return result;
     }
 
-    private String createRequestParams(HashMap<String, String> params) {
+    private String createRequestParams(HashMap<String, String> params) throws UnsupportedEncodingException {
         StringBuffer result = new StringBuffer();
         for (String key :
                 params.keySet()) {
             if(result.length() != 0)
                 result.append("&");
-            try {
                 result.append(key)
                         .append("=")
                         .append(URLEncoder.encode(params.get(key), charset));
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-            }
         }
         return result.toString();
     }
 
     @Override
     public void deliverResult(String data) {
-        JSONObject json = null;
-        String status = "";
-        String message = "";
-        String url = "";
+        if(data != null && !TextUtils.isEmpty(data)){
+            JSONObject json = null;
+            String status = "";
+            String message = "";
+            String url = "";
 
-        try {
-            json = new JSONObject(data);
-            status = json.getString("status");
-            message = json.getString("message");
-            url = json.getString("url");
-        } catch (JSONException e) {
-            e.printStackTrace();
+            try {
+                json = new JSONObject(data);
+                status = json.getString("status");
+                message = json.getString("message");
+                url = json.getString("url");
+            } catch (JSONException e) {
+                ErrorHandler.onJsonError(e.getStackTrace());
+            }
+
+            if(TextUtils.equals(status, OK_STATUS))
+                super.deliverResult(url);
+            else
+                super.deliverResult(message);
         }
-
-        if(TextUtils.equals(status, OK_STATUS))
-            super.deliverResult(url);
-        else
-            super.deliverResult(message);
     }
 }
